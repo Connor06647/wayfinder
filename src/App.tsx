@@ -44,6 +44,24 @@ const starterLibrary: LibraryEntry[] = [
   { id: 103, title: 'Subnautica', status: 'Want to play', image: 'https://images.unsplash.com/photo-1559825481-12a05cc00344?auto=format&fit=crop&w=700&q=80', rating: null, review: '', updated: 'Added recently' },
 ]
 
+const gameSignals: Record<string, string[]> = {
+  Hades: ['action', 'roguelike', 'fast combat', 'mythology'],
+  'Octopath Traveler': ['rpg', 'turn-based', 'party', 'story'],
+  Subnautica: ['exploration', 'survival', 'underwater', 'crafting'],
+  'Sea of Stars': ['rpg', 'turn-based', 'party', 'story'],
+  Dredge: ['exploration', 'survival', 'atmospheric', 'story'],
+  Tunic: ['action', 'exploration', 'adventure', 'discovery'],
+  Pentiment: ['story', 'narrative', 'mystery', 'rpg'],
+  'Outer Wilds': ['exploration', 'discovery', 'story', 'adventure'],
+  'Slay the Spire': ['strategy', 'roguelike', 'deckbuilder'],
+  "Baldur's Gate 3": ['rpg', 'party', 'story', 'turn-based'],
+  'Stardew Valley': ['simulation', 'exploration', 'crafting', 'story'],
+  'The Witcher 3': ['rpg', 'open-world', 'story', 'adventure'],
+  'Hollow Knight': ['action', 'exploration', 'discovery', 'adventure'],
+  'Disco Elysium': ['rpg', 'story', 'narrative', 'mystery'],
+  'It Takes Two': ['adventure', 'story', 'party'],
+}
+
 const getStored = <T,>(key: string, fallback: T): T => {
   try { return JSON.parse(localStorage.getItem(key) ?? '') as T } catch { return fallback }
 }
@@ -58,10 +76,36 @@ function App() {
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [notice, setNotice] = useState('')
+  const [remoteGames, setRemoteGames] = useState<Game[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState('')
 
   useEffect(() => { localStorage.setItem('wayfinder-saved', JSON.stringify(saved)) }, [saved])
   useEffect(() => { localStorage.setItem('wayfinder-library', JSON.stringify(library)) }, [library])
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 2600); return () => window.clearTimeout(timer) }, [notice])
+  useEffect(() => {
+    const search = query.trim()
+    if (search.length < 1) {
+      setRemoteGames([])
+      setSearchError('')
+      setSearchLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setSearchLoading(true)
+    setSearchError('')
+    fetch(`/api/games?search=${encodeURIComponent(search)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error((await response.json()).message ?? 'RAWG search failed.')
+        return response.json()
+      })
+      .then((data) => setRemoteGames((data.results ?? []).filter((game: RawgGame) => isRawgMatch(game, search)).sort(rankRawgResults(search)).map(mapRawgGame)))
+      .catch((error: Error) => { if (error.name !== 'AbortError') setSearchError(error.message) })
+      .finally(() => setSearchLoading(false))
+
+    return () => controller.abort()
+  }, [query])
 
   const filteredGames = useMemo(() => {
     const normalizedQuery = query.toLowerCase()
@@ -71,6 +115,8 @@ function App() {
       return matchesQuery && matchesGenre
     })
   }, [activeGenre, query])
+
+  const recommendations = useMemo(() => buildRecommendations(library, games), [library])
 
   const toggleSaved = (id: number) => setSaved((current) => current.includes(id) ? current.filter((gameId) => gameId !== id) : [...current, id])
   const addToLibrary = (game: Game, status: LibraryEntry['status'] = 'Want to play') => {
@@ -86,8 +132,8 @@ function App() {
     <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} libraryCount={library.length} profileStrength={Math.min(96, 52 + library.filter((item) => item.rating).length * 7)} />
     <main className="content">
       <header className="topbar"><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{activeNav}</strong></div><div className="top-actions"><button className="notification" aria-label="Notifications">♢<i /></button><div className="mini-avatar">CJ</div></div></header>
-      {activeNav === 'Discover' && <Discover query={query} setQuery={setQuery} activeGenre={activeGenre} setActiveGenre={setActiveGenre} filteredGames={filteredGames} saved={saved} toggleSaved={toggleSaved} showAll={showAll} setShowAll={setShowAll} setSelectedGame={setSelectedGame} setActiveNav={setActiveNav} library={library} />}
-      {activeNav === 'My library' && <LibraryView library={library} setShowAdd={setShowAdd} updateEntry={updateEntry} removeEntry={removeEntry} />}
+      {activeNav === 'Discover' && <Discover query={query} setQuery={setQuery} activeGenre={activeGenre} setActiveGenre={setActiveGenre} filteredGames={query.trim().length >= 1 ? remoteGames : filteredGames} recommendations={recommendations} saved={saved} toggleSaved={toggleSaved} showAll={showAll} setShowAll={setShowAll} setSelectedGame={setSelectedGame} setActiveNav={setActiveNav} library={library} searchLoading={searchLoading} searchError={searchError} />}
+      {activeNav === 'My library' && <LibraryView library={library} setShowAdd={setShowAdd} updateEntry={updateEntry} removeEntry={removeEntry} setActiveNav={setActiveNav} />}
       {activeNav === 'Reviews' && <ReviewsView library={library} updateEntry={updateEntry} setActiveNav={setActiveNav} />}
     </main>
     {selectedGame && <GameModal game={selectedGame} inLibrary={library.some((entry) => entry.title === selectedGame.title)} close={() => setSelectedGame(null)} addToLibrary={addToLibrary} toggleSaved={toggleSaved} saved={saved.includes(selectedGame.id)} />}
@@ -96,27 +142,139 @@ function App() {
   </div>
 }
 
+function buildRecommendations(library: LibraryEntry[], candidates: Game[]) {
+  const rated = library.filter((entry) => entry.rating !== null)
+  const ownedTitles = new Set(library.map((entry) => entry.title.toLowerCase()))
+  return candidates
+    .filter((game) => !ownedTitles.has(game.title.toLowerCase()))
+    .map((game) => {
+      const candidateSignals = gameSignals[game.title] ?? game.genre.toLowerCase().split(/[^a-z]+/).filter(Boolean)
+      const matches = rated.map((seed) => {
+        const shared = (gameSignals[seed.title] ?? []).filter((signal) => candidateSignals.includes(signal))
+        return { seed, shared, score: shared.length * (seed.rating ?? 0) }
+      }).sort((first, second) => second.score - first.score)[0]
+      if (!matches || matches.shared.length === 0) return null
+      const matchPercent = Math.min(98, Math.round(58 + matches.shared.length * 8 + (matches.seed.rating ?? 0) * 3))
+      const sharedText = matches.shared.slice(0, 3).join(', ') || game.genre.toLowerCase()
+      return { ...game, match: matchPercent, reason: `Because you rated ${matches.seed.title} ${matches.seed.rating}/5. Shared signals: ${sharedText}.` }
+    })
+    .filter((game): game is Game => game !== null)
+    .sort((first, second) => second.match - first.match)
+}
+
+function rankRawgResults(search: string) {
+  const normalizedSearch = search.toLowerCase().trim()
+  return (first: RawgGame, second: RawgGame) => {
+    const firstScore = rawgRelevanceScore(first, normalizedSearch)
+    const secondScore = rawgRelevanceScore(second, normalizedSearch)
+    if (firstScore !== secondScore) return firstScore - secondScore
+    if (isGtaSearch(normalizedSearch) && isGtaTitle(first.name) && isGtaTitle(second.name)) return gtaVersion(second.name) - gtaVersion(first.name)
+    if (isFifaSearch(normalizedSearch) && isFifaTitle(first.name) && isFifaTitle(second.name)) return fifaYear(second.name) - fifaYear(first.name)
+    if ((second.ratings_count ?? 0) !== (first.ratings_count ?? 0)) return (second.ratings_count ?? 0) - (first.ratings_count ?? 0)
+    if ((second.rating ?? 0) !== (first.rating ?? 0)) return (second.rating ?? 0) - (first.rating ?? 0)
+    return (second.released ?? '').localeCompare(first.released ?? '')
+  }
+}
+
+function isRawgMatch(game: RawgGame, search: string) {
+  const title = game.name.toLowerCase()
+  const normalizedSearch = search.toLowerCase().trim()
+  return title.includes(normalizedSearch) || title.includes('grand theft auto') && isGtaSearch(normalizedSearch) || game.genres?.some((genre) => genre.name.toLowerCase().includes(normalizedSearch))
+}
+
+function rawgRelevanceScore(game: RawgGame, search: string) {
+  const title = game.name.toLowerCase()
+  const matchesGtaFranchise = isGtaSearch(search) && title.includes('grand theft auto')
+  const matchesFortnite = search.startsWith('fort') && title.startsWith('fortnite')
+  if (title === search) return 0
+  if (matchesFortnite && title === 'fortnite') return 0
+  if (matchesGtaFranchise && title.startsWith('grand theft auto')) return 0
+  if (matchesFortnite) return 1
+  if (title.startsWith(search) || matchesGtaFranchise && title.startsWith('grand theft auto')) return 1
+  if (title.includes(` ${search}`) || matchesGtaFranchise) return 2
+  if (title.includes(search)) return 3
+  return 4
+}
+
+function isGtaSearch(search: string) {
+  return search === 'gta' || search === 'grand theft auto' || search.includes('gta 6') || search.includes('gta vi')
+}
+
+function isGtaTitle(title: string) {
+  return title.toLowerCase().includes('grand theft auto')
+}
+
+function gtaVersion(title: string) {
+  const normalizedTitle = title.toLowerCase()
+  const versions: [string, number][] = [['vi', 6], ['v', 5], ['iv', 4], ['iii', 3], ['ii', 2], ['i', 1]]
+  const match = versions.find(([version]) => new RegExp(`\\b${version}\\b`).test(normalizedTitle))
+  return match?.[1] ?? 0
+}
+
+function isFifaSearch(search: string) {
+  return search.includes('fifa')
+}
+
+function isFifaTitle(title: string) {
+  return title.toLowerCase().includes('fifa')
+}
+
+function fifaYear(title: string) {
+  const match = title.match(/fifa(?: soccer)?\s+(\d{2,4})/i)
+  if (!match) return 0
+  const year = Number(match[1])
+  return year < 100 ? 2000 + year : year
+}
+
+type RawgGame = {
+  id: number
+  name: string
+  background_image?: string
+  rating?: number
+  ratings_count?: number
+  released?: string
+  genres?: { name: string }[]
+  platforms?: { platform: { name: string } }[]
+}
+
+function mapRawgGame(game: RawgGame): Game {
+  return {
+    id: game.id,
+    title: game.name,
+    genre: game.genres?.[0]?.name ?? 'Game',
+    reason: 'Found in the RAWG game database. Open this result to add it to your library.',
+    match: Math.round((game.rating ?? 0) * 20),
+    image: game.background_image ?? '',
+    platforms: game.platforms?.slice(0, 4).map((item) => item.platform.name).join(' · ') || 'Platform details unavailable',
+    meta: `${game.released?.slice(0, 4) ?? 'Release date unknown'} · RAWG database`,
+    rating: game.rating ?? 0,
+  }
+}
+
 function Sidebar({ activeNav, setActiveNav, libraryCount, profileStrength }: { activeNav: string, setActiveNav: (value: string) => void, libraryCount: number, profileStrength: number }) {
   return <aside className="sidebar"><div className="brand"><span className="brand-mark">◒</span><span>wayfinder</span></div><div className="profile-card"><div className="avatar">CJ</div><div><strong>Casey Johnson</strong><span>Curious collector</span></div><button className="icon-button" aria-label="Open profile menu">···</button></div><nav className="main-nav" aria-label="Main navigation">{['Discover', 'My library', 'Reviews'].map((item) => <button key={item} className={activeNav === item ? 'nav-item active' : 'nav-item'} onClick={() => setActiveNav(item)}><span className="nav-icon">{item === 'Discover' ? '⌕' : item === 'My library' ? '▱' : '✦'}</span>{item}{item === 'My library' && <span className="nav-count">{libraryCount}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="taste-progress"><div><span>Profile strength</span><b>{profileStrength}%</b></div><div className="progress-track"><span style={{ width: `${profileStrength}%` }} /></div><small>{profileStrength < 75 ? 'Rate more games for sharper matches' : 'Your recommendations are getting sharper'}</small></div><button className="nav-item"><span className="nav-icon">⚙</span>Settings</button><div className="sidebar-foot"><span className="status-dot" /> Recommendations are learning</div></div></aside>
 }
 
-function Discover({ query, setQuery, activeGenre, setActiveGenre, filteredGames, saved, toggleSaved, showAll, setShowAll, setSelectedGame, setActiveNav, library }: { query: string, setQuery: (value: string) => void, activeGenre: string, setActiveGenre: (value: string) => void, filteredGames: Game[], saved: number[], toggleSaved: (id: number) => void, showAll: boolean, setShowAll: (value: boolean) => void, setSelectedGame: (game: Game) => void, setActiveNav: (value: string) => void, library: LibraryEntry[] }) {
-  const visibleGames = query.trim() || showAll ? filteredGames : filteredGames.slice(0, 3)
-  return <><section className="welcome-row"><div><p className="eyebrow">THURSDAY, 23 SEPTEMBER 2026</p><h1>Find your next <em>favourite</em>.</h1><p className="intro">A little direction for the games you haven't met yet.</p></div><div className="streak"><span className="streak-icon">✦</span><div><strong>4 day streak</strong><small>Keep exploring</small></div></div></section><section className="preference-banner"><div className="banner-copy"><span className="spark">✦</span><div><strong>Your taste map is taking shape</strong><p>You have rated {library.filter((item) => item.rating).length} games. Add a few more to unlock more confident recommendations.</p></div></div><button className="banner-button" onClick={() => setActiveNav('Reviews')}>Rate games <span>→</span></button></section><section className="section-header"><div><p className="eyebrow accent">{query ? 'GAME CATALOGUE' : 'MADE FOR YOUR TASTE'}</p><h2>{query ? `Results for “${query}”` : 'Because you liked these'}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show less' : 'See all'} <span>↗</span></button></section><div className="filters"><div className="search-field"><span>⌕</span><input id="game-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all games" /></div><div className="filter-pills">{['All genres', 'RPG', 'Adventure', 'Strategy'].map((genre) => <button key={genre} className={activeGenre === genre ? 'filter active' : 'filter'} onClick={() => setActiveGenre(genre)}>{genre}</button>)}</div></div><div className="recommendation-grid">{visibleGames.map((game, index) => <GameCard key={game.id} game={game} index={index} saved={saved.includes(game.id)} toggleSaved={toggleSaved} open={() => setSelectedGame(game)} />)}</div>{filteredGames.length === 0 && <div className="empty-state">No games found for that search yet. Try a title such as “Hades” or a genre such as “RPG”.</div>}{!query && <section className="library-section"><div className="section-header"><div><p className="eyebrow">KEEPING TRACK</p><h2>Your library</h2></div><button className="text-button" onClick={() => setActiveNav('My library')}>Open library <span>↗</span></button></div><div className="library-list">{library.slice(0, 3).map((game) => <LibraryRow key={game.id} entry={game} compact />)}</div></section>}</>
+function Discover({ query, setQuery, activeGenre, setActiveGenre, filteredGames, recommendations, saved, toggleSaved, showAll, setShowAll, setSelectedGame, setActiveNav, library, searchLoading, searchError }: { query: string, setQuery: (value: string) => void, activeGenre: string, setActiveGenre: (value: string) => void, filteredGames: Game[], recommendations: Game[], saved: number[], toggleSaved: (id: number) => void, showAll: boolean, setShowAll: (value: boolean) => void, setSelectedGame: (game: Game) => void, setActiveNav: (value: string) => void, library: LibraryEntry[], searchLoading: boolean, searchError: string }) {
+  const displayGames = query.trim() ? filteredGames : recommendations
+  const visibleGames = showAll || query.trim() ? displayGames : displayGames.slice(0, 3)
+  const ratedSeed = library.find((entry) => entry.rating !== null)
+  return <><section className="welcome-row"><div><p className="eyebrow">THURSDAY, 23 SEPTEMBER 2026</p><h1>Find your next <em>favourite</em>.</h1><p className="intro">A little direction for the games you haven't met yet.</p></div><div className="streak"><span className="streak-icon">✦</span><div><strong>4 day streak</strong><small>Keep exploring</small></div></div></section><section className="preference-banner"><div className="banner-copy"><span className="spark">✦</span><div><strong>Your taste map is taking shape</strong><p>You have rated {library.filter((item) => item.rating).length} games. Add a few more to unlock more confident recommendations.</p></div></div><button className="banner-button" onClick={() => setActiveNav('Reviews')}>Rate games <span>→</span></button></section><section className="section-header"><div><p className="eyebrow accent">{query ? 'RAWG GAME DATABASE' : 'PERSONALISED RECOMMENDATIONS'}</p><h2>{query ? `Results for “${query}”` : ratedSeed ? `Because you rated ${ratedSeed.title} ${ratedSeed.rating}/5` : 'Rate a game to get recommendations'}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show less' : 'See all'} <span>↗</span></button></section><div className="filters"><div className="search-field"><span>⌕</span><input id="game-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search RAWG games" /></div><div className="filter-pills">{['All genres', 'RPG', 'Adventure', 'Strategy'].map((genre) => <button key={genre} className={activeGenre === genre ? 'filter active' : 'filter'} onClick={() => setActiveGenre(genre)}>{genre}</button>)}</div></div><p className="data-attribution">Game data and artwork provided by <a href="https://rawg.io/" target="_blank" rel="noreferrer">RAWG</a>.</p>{!query && ratedSeed && <p className="recommendation-note">Each card explains which of your ratings influenced it and what signals were shared.</p>}{searchLoading && <div className="empty-state">Searching the RAWG game database...</div>}{searchError && <div className="empty-state error-state">{searchError}<small> Add your replacement API key to `.env.local`, then restart the dev server.</small></div>}<div className="recommendation-grid">{!searchLoading && visibleGames.map((game, index) => <GameCard key={game.id} game={game} index={index} saved={saved.includes(game.id)} toggleSaved={toggleSaved} open={() => setSelectedGame(game)} />)}</div>{!searchLoading && !searchError && displayGames.length === 0 && <div className="empty-state">Rate a game in Reviews and Wayfinder will start building recommendations for you.</div>}{!query && <section className="library-section"><div className="section-header"><div><p className="eyebrow">KEEPING TRACK</p><h2>Your library</h2></div><button className="text-button" onClick={() => setActiveNav('My library')}>Open library <span>↗</span></button></div><div className="library-list">{library.slice(0, 3).map((game) => <LibraryRow key={game.id} entry={game} compact />)}</div></section>}</>
 }
 
 function GameCard({ game, index, saved, toggleSaved, open }: { game: Game, index: number, saved: boolean, toggleSaved: (id: number) => void, open: () => void }) {
-  return <article className="game-card" style={{ '--delay': `${index * 80}ms` } as CSSProperties} onClick={open}><div className="cover-wrap"><img src={game.image} alt="" /><span className="match-badge">{game.match}% match</span><button className={saved ? 'save-button saved' : 'save-button'} onClick={(event) => { event.stopPropagation(); toggleSaved(game.id) }} aria-label={`Save ${game.title}`}>{saved ? '♥' : '♡'}</button></div><div className="game-card-body"><div className="card-kicker"><span>{game.genre}</span><span>★ {game.rating}</span></div><h3>{game.title}</h3><p>{game.reason}</p><div className="card-meta"><span>{game.meta}</span><span>{game.platforms}</span></div></div></article>
+  return <article className="game-card" style={{ '--delay': `${index * 80}ms` } as CSSProperties} onClick={open}><div className="cover-wrap">{game.image ? <img src={game.image} alt="" /> : <div className="cover-placeholder"><span>{game.title.slice(0, 1)}</span><small>Artwork unavailable</small></div>}<span className="match-badge">{game.match}% match</span><button className={saved ? 'save-button saved' : 'save-button'} onClick={(event) => { event.stopPropagation(); toggleSaved(game.id) }} aria-label={`Save ${game.title}`}>{saved ? '♥' : '♡'}</button></div><div className="game-card-body"><div className="card-kicker"><span>{game.genre}</span><span>★ {game.rating}</span></div><h3>{game.title}</h3><p>{game.reason}</p><div className="card-meta"><span>{game.meta}</span><span>{game.platforms}</span></div></div></article>
 }
 
-function LibraryView({ library, setShowAdd, updateEntry, removeEntry }: { library: LibraryEntry[], setShowAdd: (value: boolean) => void, updateEntry: (id: number, updates: Partial<LibraryEntry>) => void, removeEntry: (id: number) => void }) {
+function LibraryView({ library, setShowAdd, updateEntry, removeEntry, setActiveNav }: { library: LibraryEntry[], setShowAdd: (value: boolean) => void, updateEntry: (id: number, updates: Partial<LibraryEntry>) => void, removeEntry: (id: number) => void, setActiveNav: (value: string) => void }) {
   const [filter, setFilter] = useState('All games')
   const visible = filter === 'All games' ? library : library.filter((entry) => entry.status === filter)
-  return <><section className="page-heading"><div><p className="eyebrow accent">YOUR COLLECTION</p><h1>My <em>library</em>.</h1><p className="intro">Keep your next play session within reach.</p></div><button className="primary-button" onClick={() => setShowAdd(true)}>＋ Add a game</button></section><div className="library-summary"><div><strong>{library.length}</strong><span>total games</span></div><div><strong>{library.filter((game) => game.status === 'Completed').length}</strong><span>completed</span></div><div><strong>{library.filter((game) => game.status === 'Want to play').length}</strong><span>on your list</span></div><div><strong>{library.filter((game) => game.rating).length}</strong><span>rated</span></div></div><div className="library-toolbar"><div className="filter-pills">{['All games', 'Playing', 'Want to play', 'Completed', 'Dropped'].map((item) => <button key={item} className={filter === item ? 'filter active' : 'filter'} onClick={() => setFilter(item)}>{item}</button>)}</div></div><div className="full-library">{visible.length ? visible.map((entry) => <LibraryRow key={entry.id} entry={entry} updateEntry={updateEntry} removeEntry={removeEntry} />) : <div className="empty-state">Nothing here yet. Add a game to start building this list.</div>}</div></>
+  return <><section className="page-heading"><div><p className="eyebrow accent">YOUR COLLECTION</p><h1>My <em>library</em>.</h1><p className="intro">Keep your next play session within reach.</p></div><div className="page-actions"><button className="secondary-button" onClick={() => setActiveNav('Reviews')}>★ Rate your games</button><button className="primary-button" onClick={() => setShowAdd(true)}>＋ Add a game</button></div></section><div className="library-summary"><div><strong>{library.length}</strong><span>total games</span></div><div><strong>{library.filter((game) => game.status === 'Completed').length}</strong><span>completed</span></div><div><strong>{library.filter((game) => game.status === 'Want to play').length}</strong><span>on your list</span></div><div><strong>{library.filter((game) => game.rating).length}</strong><span>rated</span></div></div><div className="library-toolbar"><div className="filter-pills">{['All games', 'Playing', 'Want to play', 'Completed', 'Dropped'].map((item) => <button key={item} className={filter === item ? 'filter active' : 'filter'} onClick={() => setFilter(item)}>{item}</button>)}</div></div><div className="full-library">{visible.length ? visible.map((entry) => <LibraryRow key={entry.id} entry={entry} updateEntry={updateEntry} removeEntry={removeEntry} setActiveNav={setActiveNav} />) : <div className="empty-state">Nothing here yet. Add a game to start building this list.</div>}</div></>
 }
 
-function LibraryRow({ entry, compact = false, updateEntry, removeEntry }: { entry: LibraryEntry, compact?: boolean, updateEntry?: (id: number, updates: Partial<LibraryEntry>) => void, removeEntry?: (id: number) => void }) {
-  return <div className={compact ? 'library-row compact' : 'library-row full'}><img src={entry.image} alt="" /><div className="library-title"><strong>{entry.title}</strong><span>{entry.updated}</span></div><select className="status-select" value={entry.status} onChange={(event) => updateEntry?.(entry.id, { status: event.target.value as LibraryEntry['status'] })} aria-label={`Status for ${entry.title}`}><option>Completed</option><option>Playing</option><option>Want to play</option><option>Dropped</option></select>{entry.rating ? <span className="rating">★ {entry.rating}</span> : <span className="rating muted">—</span>}{!compact && <button className="remove-button" onClick={() => removeEntry?.(entry.id)}>Remove</button>}</div>
+function LibraryRow({ entry, compact = false, updateEntry, removeEntry, setActiveNav }: { entry: LibraryEntry, compact?: boolean, updateEntry?: (id: number, updates: Partial<LibraryEntry>) => void, removeEntry?: (id: number) => void, setActiveNav?: (value: string) => void }) {
+  const canRate = !entry.rating && (entry.status === 'Playing' || entry.status === 'Completed')
+  return <div className={compact ? 'library-row compact' : 'library-row full'}><img src={entry.image} alt="" /><div className="library-title"><strong>{entry.title}</strong><span>{entry.updated}</span></div><select className="status-select" value={entry.status} onChange={(event) => updateEntry?.(entry.id, { status: event.target.value as LibraryEntry['status'] })} aria-label={`Status for ${entry.title}`}><option>Completed</option><option>Playing</option><option>Want to play</option><option>Dropped</option></select>{canRate && <button className="rate-row-button" onClick={() => setActiveNav?.('Reviews')}>Rate this game <span>→</span></button>}{entry.rating ? <span className="rating">★ {entry.rating}</span> : <span className="rating muted">—</span>}{!compact && <button className="remove-button" onClick={() => removeEntry?.(entry.id)}>Remove</button>}</div>
 }
 
 function ReviewsView({ library, updateEntry, setActiveNav }: { library: LibraryEntry[], updateEntry: (id: number, updates: Partial<LibraryEntry>) => void, setActiveNav: (value: string) => void }) {
@@ -130,7 +288,7 @@ function ReviewEditor({ entry, updateEntry }: { entry: LibraryEntry, updateEntry
 }
 
 function GameModal({ game, inLibrary, close, addToLibrary, toggleSaved, saved }: { game: Game, inLibrary: boolean, close: () => void, addToLibrary: (game: Game, status?: LibraryEntry['status']) => void, toggleSaved: (id: number) => void, saved: boolean }) {
-  return <div className="modal-backdrop" onClick={close}><div className="game-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={close}>×</button><img className="modal-cover" src={game.image} alt="" /><div className="modal-content"><p className="eyebrow accent">{game.match}% PERSONAL MATCH · {game.genre}</p><h2>{game.title}</h2><p className="modal-reason">{game.reason}</p><div className="why-box"><strong>Why this was suggested</strong><span>Shared tags: exploration · story-rich · atmospheric</span><span>Platforms: {game.platforms}</span></div><div className="modal-actions"><button className="primary-button" onClick={() => addToLibrary(game)}>{inLibrary ? 'Already in library' : '＋ Add to library'}</button><button className={saved ? 'secondary-button saved' : 'secondary-button'} onClick={() => toggleSaved(game.id)}>{saved ? '♥ Saved' : '♡ Save for later'}</button></div></div></div></div>
+  return <div className="modal-backdrop" onClick={close}><div className="game-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={close}>×</button>{game.image ? <img className="modal-cover" src={game.image} alt="" /> : <div className="modal-cover modal-placeholder"><span>{game.title.slice(0, 1)}</span><small>Artwork unavailable from RAWG</small></div>}<div className="modal-content"><p className="eyebrow accent">{game.match}% PERSONAL MATCH · {game.genre}</p><h2>{game.title}</h2><p className="modal-reason">{game.reason}</p><div className="why-box"><strong>Why this was suggested</strong><span>Shared tags: exploration · story-rich · atmospheric</span><span>Platforms: {game.platforms}</span></div><div className="modal-actions"><button className="primary-button" onClick={() => addToLibrary(game)}>{inLibrary ? 'Already in library' : '＋ Add to library'}</button><button className={saved ? 'secondary-button saved' : 'secondary-button'} onClick={() => toggleSaved(game.id)}>{saved ? '♥ Saved' : '♡ Save for later'}</button></div></div></div></div>
 }
 
 function AddGameModal({ close, addGame }: { close: () => void, addGame: (title: string, status: LibraryEntry['status']) => void }) {
