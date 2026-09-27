@@ -254,6 +254,14 @@ function fifaYear(title: string) {
   return year < 100 ? 2000 + year : year
 }
 
+const genrePillSlugs: Record<string, string> = { RPG: 'rpg', Adventure: 'adventure', Strategy: 'strategy' }
+
+function matchesGenrePill(game: Game, pill: string) {
+  const slug = genrePillSlugs[pill]
+  if (slug && game.genreSlugs.includes(slug)) return true
+  return game.genre.toLowerCase().includes(pill.toLowerCase())
+}
+
 type RawgGame = {
   id: number
   name: string
@@ -287,7 +295,8 @@ function Sidebar({ activeNav, setActiveNav, libraryCount, profileStrength }: { a
 }
 
 function Discover({ query, setQuery, activeGenre, setActiveGenre, filteredGames, recommendations, saved, toggleSaved, showAll, setShowAll, setSelectedGame, setActiveNav, library, searchLoading, searchError }: { query: string, setQuery: (value: string) => void, activeGenre: string, setActiveGenre: (value: string) => void, filteredGames: Game[], recommendations: Game[], saved: number[], toggleSaved: (id: number) => void, showAll: boolean, setShowAll: (value: boolean) => void, setSelectedGame: (game: Game) => void, setActiveNav: (value: string) => void, library: LibraryEntry[], searchLoading: boolean, searchError: string }) {
-  const displayGames = query.trim() ? filteredGames : recommendations
+  const baseGames = query.trim() ? filteredGames : recommendations
+  const displayGames = activeGenre === 'All genres' ? baseGames : baseGames.filter((game) => matchesGenrePill(game, activeGenre))
   const visibleGames = showAll || query.trim() ? displayGames : displayGames.slice(0, 3)
   const ratedSeed = library.find((entry) => entry.rating !== null)
   return <><section className="welcome-row"><div><p className="eyebrow">THURSDAY, 23 SEPTEMBER 2026</p><h1>Find your next <em>favourite</em>.</h1><p className="intro">A little direction for the games you haven't met yet.</p></div><div className="streak"><span className="streak-icon">✦</span><div><strong>4 day streak</strong><small>Keep exploring</small></div></div></section><section className="preference-banner"><div className="banner-copy"><span className="spark">✦</span><div><strong>Your taste map is taking shape</strong><p>You have rated {library.filter((item) => item.rating).length} games. Add a few more to unlock more confident recommendations.</p></div></div><button className="banner-button" onClick={() => setActiveNav('Reviews')}>Rate games <span>→</span></button></section><section className="section-header"><div><p className="eyebrow accent">{query ? 'RAWG GAME DATABASE' : 'PERSONALISED RECOMMENDATIONS'}</p><h2>{query ? `Results for “${query}”` : ratedSeed ? `Because you rated ${ratedSeed.title} ${ratedSeed.rating}/5` : 'Rate a game to get recommendations'}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show less' : 'See all'} <span>↗</span></button></section><div className="filters"><div className="search-field"><span>⌕</span><input id="game-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search RAWG games" /></div><div className="filter-pills">{['All genres', 'RPG', 'Adventure', 'Strategy'].map((genre) => <button key={genre} className={activeGenre === genre ? 'filter active' : 'filter'} onClick={() => setActiveGenre(genre)}>{genre}</button>)}</div></div><p className="data-attribution">Game data and artwork provided by <a href="https://rawg.io/" target="_blank" rel="noreferrer">RAWG</a>.</p>{!query && ratedSeed && <p className="recommendation-note">Each card explains which of your ratings influenced it and what signals were shared.</p>}{searchLoading && <div className="empty-state">Searching the RAWG game database...</div>}{searchError && <div className="empty-state error-state">{searchError}<small> Add your replacement API key to `.env.local`, then restart the dev server.</small></div>}<div className="recommendation-grid">{!searchLoading && visibleGames.map((game, index) => <GameCard key={game.id} game={game} index={index} saved={saved.includes(game.id)} toggleSaved={toggleSaved} open={() => setSelectedGame(game)} />)}</div>{!searchLoading && !searchError && displayGames.length === 0 && <div className="empty-state">Rate a game in Reviews and Wayfinder will start building recommendations for you.</div>}{!query && <section className="library-section"><div className="section-header"><div><p className="eyebrow">KEEPING TRACK</p><h2>Your library</h2></div><button className="text-button" onClick={() => setActiveNav('My library')}>Open library <span>↗</span></button></div><div className="library-list">{library.slice(0, 3).map((game) => <LibraryRow key={game.id} entry={game} compact />)}</div></section>}</>
