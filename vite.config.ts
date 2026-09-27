@@ -14,13 +14,30 @@ function rawgProxy(apiKey: string): Plugin {
 
         const requestUrl = new URL(request.url, 'http://localhost')
         const search = requestUrl.searchParams.get('search')?.trim()
-        if (!search) {
+        const genres = requestUrl.searchParams.get('genres')?.trim()
+        const tags = requestUrl.searchParams.get('tags')?.trim()
+        if (!search && !genres && !tags) {
           response.statusCode = 400
           response.end(JSON.stringify({ message: 'A search term is required.' }))
           return
         }
 
         try {
+          if (!search) {
+            const rawgUrl = new URL('https://api.rawg.io/api/games')
+            rawgUrl.searchParams.set('key', apiKey)
+            if (genres) rawgUrl.searchParams.set('genres', genres)
+            if (tags) rawgUrl.searchParams.set('tags', tags)
+            rawgUrl.searchParams.set('ordering', '-rating')
+            rawgUrl.searchParams.set('page_size', '20')
+            const rawgResponse = await fetch(rawgUrl)
+            if (!rawgResponse.ok) throw new Error(`RAWG returned ${rawgResponse.status}`)
+            response.statusCode = 200
+            response.setHeader('Content-Type', 'application/json')
+            response.end(await rawgResponse.text())
+            return
+          }
+
           const normalizedSearch = search.toLowerCase()
           const isGtaQuery = normalizedSearch === 'gta' || normalizedSearch.includes('gta 6') || normalizedSearch.includes('gta vi')
           const searchTerms = isGtaQuery ? ['Grand Theft Auto', 'GTA'] : [search]

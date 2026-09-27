@@ -11,6 +11,8 @@ type Game = {
   platforms: string
   meta: string
   rating: number
+  genreSlugs: string[]
+  tagSlugs: string[]
 }
 
 type LibraryEntry = {
@@ -21,46 +23,30 @@ type LibraryEntry = {
   rating: number | null
   review: string
   updated: string
+  genreSlugs: string[]
+  tagSlugs: string[]
 }
 
 const games: Game[] = [
-  { id: 1, title: 'Sea of Stars', genre: 'Turn-based RPG', reason: 'Shares the hand-crafted world-building and party-based combat you love in Octopath Traveler.', match: 94, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1244090/header.jpg', platforms: 'PC · Switch · PS5', meta: '2023 · Sabotage Studio', rating: 4.8 },
-  { id: 2, title: 'Dredge', genre: 'Atmospheric adventure', reason: 'Combines the quiet exploration of Subnautica with a darker, discovery-first loop.', match: 89, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1562430/header.jpg', platforms: 'PC · Xbox · PS5 · Switch', meta: '2023 · Black Salt Games', rating: 4.5 },
-  { id: 3, title: 'Tunic', genre: 'Action adventure', reason: 'A compact, mysterious world for players who enjoy discovery without hand-holding.', match: 86, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/553420/header.jpg', platforms: 'PC · Xbox · PlayStation', meta: '2022 · Isometricorp Games', rating: 4.5 },
-  { id: 4, title: 'Pentiment', genre: 'Narrative mystery', reason: 'Connects with your interest in story-rich worlds where every choice leaves a mark.', match: 82, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1205520/header.jpg', platforms: 'PC · Xbox · Switch', meta: '2022 · Obsidian Entertainment', rating: 4.4 },
-  { id: 5, title: 'Outer Wilds', genre: 'Exploration adventure', reason: 'Rewards curiosity with a world that slowly reveals its own rules and secrets.', match: 80, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/753640/header.jpg', platforms: 'PC · Xbox · PlayStation', meta: '2019 · Mobius Digital', rating: 4.9 },
-  { id: 6, title: 'Slay the Spire', genre: 'Strategy deckbuilder', reason: 'A smart, replayable challenge that turns experimentation into a satisfying strategy loop.', match: 76, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/646570/header.jpg', platforms: 'PC · Xbox · Switch', meta: '2019 · Mega Crit', rating: 4.6 },
-  { id: 7, title: 'Baldur\'s Gate 3', genre: 'Party-based RPG', reason: 'Deep role-playing, meaningful choices and a party of characters worth getting attached to.', match: 91, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/header.jpg', platforms: 'PC · Xbox · PS5', meta: '2023 · Larian Studios', rating: 4.9 },
-  { id: 8, title: 'Stardew Valley', genre: 'Farming simulation', reason: 'A gentle, open-ended world with satisfying routines, exploration and long-term progression.', match: 78, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/413150/header.jpg', platforms: 'PC · Xbox · PlayStation · Switch', meta: '2016 · ConcernedApe', rating: 4.8 },
-  { id: 9, title: 'The Witcher 3', genre: 'Open-world RPG', reason: 'A rich story-driven adventure where side quests feel as considered as the main path.', match: 85, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/292030/header.jpg', platforms: 'PC · Xbox · PlayStation · Switch', meta: '2015 · CD Projekt Red', rating: 4.7 },
-  { id: 10, title: 'Hollow Knight', genre: 'Metroidvania', reason: 'A beautiful, challenging world built around curiosity, mastery and hidden paths.', match: 83, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/367520/header.jpg', platforms: 'PC · Xbox · PlayStation · Switch', meta: '2017 · Team Cherry', rating: 4.8 },
-  { id: 11, title: 'Disco Elysium', genre: 'Narrative RPG', reason: 'A singular detective story for players who value writing, atmosphere and consequential choices.', match: 81, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/632470/header.jpg', platforms: 'PC · PlayStation · Xbox · Switch', meta: '2019 · ZA/UM', rating: 4.7 },
-  { id: 12, title: 'It Takes Two', genre: 'Co-op adventure', reason: 'A playful co-operative journey that keeps introducing new ideas and shared challenges.', match: 74, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1426210/header.jpg', platforms: 'PC · Xbox · PlayStation', meta: '2021 · Hazelight Studios', rating: 4.6 },
+  { id: 1, title: 'Sea of Stars', genre: 'Turn-based RPG', reason: 'Shares the hand-crafted world-building and party-based combat you love in Octopath Traveler.', match: 94, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1244090/header.jpg', platforms: 'PC · Switch · PS5', meta: '2023 · Sabotage Studio', rating: 4.8, genreSlugs: ['rpg', 'indie'], tagSlugs: ['turn-based-combat', 'story-rich', 'singleplayer'] },
+  { id: 2, title: 'Dredge', genre: 'Atmospheric adventure', reason: 'Combines the quiet exploration of Subnautica with a darker, discovery-first loop.', match: 89, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1562430/header.jpg', platforms: 'PC · Xbox · PS5 · Switch', meta: '2023 · Black Salt Games', rating: 4.5, genreSlugs: ['adventure', 'indie'], tagSlugs: ['atmospheric', 'survival', 'exploration'] },
+  { id: 3, title: 'Tunic', genre: 'Action adventure', reason: 'A compact, mysterious world for players who enjoy discovery without hand-holding.', match: 86, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/553420/header.jpg', platforms: 'PC · Xbox · PlayStation', meta: '2022 · Isometricorp Games', rating: 4.5, genreSlugs: ['action', 'adventure', 'indie'], tagSlugs: ['exploration', 'difficult', 'atmospheric'] },
+  { id: 4, title: 'Pentiment', genre: 'Narrative mystery', reason: 'Connects with your interest in story-rich worlds where every choice leaves a mark.', match: 82, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1205520/header.jpg', platforms: 'PC · Xbox · Switch', meta: '2022 · Obsidian Entertainment', rating: 4.4, genreSlugs: ['rpg', 'adventure'], tagSlugs: ['story-rich', 'choices-matter', 'singleplayer'] },
+  { id: 5, title: 'Outer Wilds', genre: 'Exploration adventure', reason: 'Rewards curiosity with a world that slowly reveals its own rules and secrets.', match: 80, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/753640/header.jpg', platforms: 'PC · Xbox · PlayStation', meta: '2019 · Mobius Digital', rating: 4.9, genreSlugs: ['action', 'adventure', 'indie'], tagSlugs: ['exploration', 'atmospheric', 'singleplayer'] },
+  { id: 6, title: 'Slay the Spire', genre: 'Strategy deckbuilder', reason: 'A smart, replayable challenge that turns experimentation into a satisfying strategy loop.', match: 76, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/646570/header.jpg', platforms: 'PC · Xbox · Switch', meta: '2019 · Mega Crit', rating: 4.6, genreSlugs: ['strategy', 'indie'], tagSlugs: ['roguelike', 'singleplayer'] },
+  { id: 7, title: 'Baldur\'s Gate 3', genre: 'Party-based RPG', reason: 'Deep role-playing, meaningful choices and a party of characters worth getting attached to.', match: 91, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/header.jpg', platforms: 'PC · Xbox · PS5', meta: '2023 · Larian Studios', rating: 4.9, genreSlugs: ['rpg', 'strategy'], tagSlugs: ['turn-based-combat', 'choices-matter', 'story-rich'] },
+  { id: 8, title: 'Stardew Valley', genre: 'Farming simulation', reason: 'A gentle, open-ended world with satisfying routines, exploration and long-term progression.', match: 78, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/413150/header.jpg', platforms: 'PC · Xbox · PlayStation · Switch', meta: '2016 · ConcernedApe', rating: 4.8, genreSlugs: ['simulation', 'indie', 'rpg'], tagSlugs: ['farming', 'open-world', 'singleplayer'] },
+  { id: 9, title: 'The Witcher 3', genre: 'Open-world RPG', reason: 'A rich story-driven adventure where side quests feel as considered as the main path.', match: 85, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/292030/header.jpg', platforms: 'PC · Xbox · PlayStation · Switch', meta: '2015 · CD Projekt Red', rating: 4.7, genreSlugs: ['rpg', 'action', 'adventure'], tagSlugs: ['open-world', 'story-rich', 'singleplayer'] },
+  { id: 10, title: 'Hollow Knight', genre: 'Metroidvania', reason: 'A beautiful, challenging world built around curiosity, mastery and hidden paths.', match: 83, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/367520/header.jpg', platforms: 'PC · Xbox · PlayStation · Switch', meta: '2017 · Team Cherry', rating: 4.8, genreSlugs: ['action', 'adventure', 'indie'], tagSlugs: ['metroidvania', 'atmospheric', 'exploration'] },
+  { id: 11, title: 'Disco Elysium', genre: 'Narrative RPG', reason: 'A singular detective story for players who value writing, atmosphere and consequential choices.', match: 81, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/632470/header.jpg', platforms: 'PC · PlayStation · Xbox · Switch', meta: '2019 · ZA/UM', rating: 4.7, genreSlugs: ['rpg', 'adventure', 'indie'], tagSlugs: ['story-rich', 'choices-matter', 'narrative'] },
+  { id: 12, title: 'It Takes Two', genre: 'Co-op adventure', reason: 'A playful co-operative journey that keeps introducing new ideas and shared challenges.', match: 74, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1426210/header.jpg', platforms: 'PC · Xbox · PlayStation', meta: '2021 · Hazelight Studios', rating: 4.6, genreSlugs: ['action', 'adventure'], tagSlugs: ['co-op', 'singleplayer', 'story-rich'] },
 ]
 
 const starterLibrary: LibraryEntry[] = [
-  { id: 101, title: 'Hades', status: 'Completed', image: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=700&q=80', rating: 5, review: 'A brilliant action loop with characters I wanted to spend more time with.', updated: 'Updated recently' },
-  { id: 102, title: 'Octopath Traveler', status: 'Playing', image: 'https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?auto=format&fit=crop&w=700&q=80', rating: 4.5, review: '', updated: 'Updated recently' },
-  { id: 103, title: 'Subnautica', status: 'Want to play', image: 'https://images.unsplash.com/photo-1559825481-12a05cc00344?auto=format&fit=crop&w=700&q=80', rating: null, review: '', updated: 'Added recently' },
+  { id: 101, title: 'Hades', status: 'Completed', image: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=700&q=80', rating: 5, genreSlugs: ['action', 'indie'], tagSlugs: ['roguelike', 'singleplayer', 'story-rich'], review: 'A brilliant action loop with characters I wanted to spend more time with.', updated: 'Updated recently' },
+  { id: 102, title: 'Octopath Traveler', status: 'Playing', image: 'https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?auto=format&fit=crop&w=700&q=80', rating: 4.5, genreSlugs: ['rpg'], tagSlugs: ['turn-based-combat', 'story-rich', 'singleplayer'], review: '', updated: 'Updated recently' },
+  { id: 103, title: 'Subnautica', status: 'Want to play', image: 'https://images.unsplash.com/photo-1559825481-12a05cc00344?auto=format&fit=crop&w=700&q=80', rating: null, genreSlugs: ['action', 'adventure'], tagSlugs: ['survival', 'open-world', 'exploration'], review: '', updated: 'Added recently' },
 ]
-
-const gameSignals: Record<string, string[]> = {
-  Hades: ['action', 'roguelike', 'fast combat', 'mythology'],
-  'Octopath Traveler': ['rpg', 'turn-based', 'party', 'story'],
-  Subnautica: ['exploration', 'survival', 'underwater', 'crafting'],
-  'Sea of Stars': ['rpg', 'turn-based', 'party', 'story'],
-  Dredge: ['exploration', 'survival', 'atmospheric', 'story'],
-  Tunic: ['action', 'exploration', 'adventure', 'discovery'],
-  Pentiment: ['story', 'narrative', 'mystery', 'rpg'],
-  'Outer Wilds': ['exploration', 'discovery', 'story', 'adventure'],
-  'Slay the Spire': ['strategy', 'roguelike', 'deckbuilder'],
-  "Baldur's Gate 3": ['rpg', 'party', 'story', 'turn-based'],
-  'Stardew Valley': ['simulation', 'exploration', 'crafting', 'story'],
-  'The Witcher 3': ['rpg', 'open-world', 'story', 'adventure'],
-  'Hollow Knight': ['action', 'exploration', 'discovery', 'adventure'],
-  'Disco Elysium': ['rpg', 'story', 'narrative', 'mystery'],
-  'It Takes Two': ['adventure', 'story', 'party'],
-}
 
 const getStored = <T,>(key: string, fallback: T): T => {
   try { return JSON.parse(localStorage.getItem(key) ?? '') as T } catch { return fallback }
@@ -71,7 +57,11 @@ function App() {
   const [query, setQuery] = useState('')
   const [activeGenre, setActiveGenre] = useState('All genres')
   const [saved, setSaved] = useState<number[]>(() => getStored('wayfinder-saved', [2]))
-  const [library, setLibrary] = useState<LibraryEntry[]>(() => getStored('wayfinder-library', starterLibrary))
+  const [library, setLibrary] = useState<LibraryEntry[]>(() => getStored('wayfinder-library', starterLibrary).map((entry) => {
+    if (entry.genreSlugs?.length || entry.tagSlugs?.length) return entry
+    const known = [...starterLibrary, ...games].find((item) => item.title === entry.title)
+    return { ...entry, genreSlugs: known?.genreSlugs ?? [], tagSlugs: known?.tagSlugs ?? [] }
+  }))
   const [showAll, setShowAll] = useState(false)
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -79,6 +69,7 @@ function App() {
   const [remoteGames, setRemoteGames] = useState<Game[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [recommendations, setRecommendations] = useState<Game[]>([])
 
   useEffect(() => { localStorage.setItem('wayfinder-saved', JSON.stringify(saved)) }, [saved])
   useEffect(() => { localStorage.setItem('wayfinder-library', JSON.stringify(library)) }, [library])
@@ -107,6 +98,38 @@ function App() {
     return () => controller.abort()
   }, [query])
 
+  useEffect(() => {
+    const rated = library.filter((entry) => entry.rating !== null)
+    const ownedTitles = new Set(library.map((entry) => entry.title.toLowerCase()))
+    const signalled = rated.filter((entry) => entry.genreSlugs.length || entry.tagSlugs.length)
+
+    if (signalled.length === 0) {
+      setRecommendations(scoreCandidates(rated, games, ownedTitles))
+      return
+    }
+
+    const genreTally = new Map<string, number>()
+    const tagTally = new Map<string, number>()
+    signalled.forEach((entry) => {
+      entry.genreSlugs.forEach((slug) => genreTally.set(slug, (genreTally.get(slug) ?? 0) + (entry.rating ?? 0)))
+      entry.tagSlugs.forEach((slug) => tagTally.set(slug, (tagTally.get(slug) ?? 0) + (entry.rating ?? 0)))
+    })
+    const topGenres = [...genreTally.entries()].sort((first, second) => second[1] - first[1]).slice(0, 2).map(([slug]) => slug)
+    const topTags = [...tagTally.entries()].sort((first, second) => second[1] - first[1]).slice(0, 3).map(([slug]) => slug)
+
+    const controller = new AbortController()
+    const params = new URLSearchParams()
+    if (topGenres.length) params.set('genres', topGenres.join(','))
+    if (topTags.length) params.set('tags', topTags.join(','))
+
+    fetch(`/api/games?${params.toString()}`, { signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error('RAWG discovery failed.'); return response.json() })
+      .then((data) => setRecommendations(scoreCandidates(rated, (data.results ?? []).map(mapRawgGame), ownedTitles)))
+      .catch((error: Error) => { if (error.name !== 'AbortError') setRecommendations(scoreCandidates(rated, games, ownedTitles)) })
+
+    return () => controller.abort()
+  }, [library])
+
   const filteredGames = useMemo(() => {
     const normalizedQuery = query.toLowerCase()
     return games.filter((game) => {
@@ -116,12 +139,10 @@ function App() {
     })
   }, [activeGenre, query])
 
-  const recommendations = useMemo(() => buildRecommendations(library, games), [library])
-
   const toggleSaved = (id: number) => setSaved((current) => current.includes(id) ? current.filter((gameId) => gameId !== id) : [...current, id])
   const addToLibrary = (game: Game, status: LibraryEntry['status'] = 'Want to play') => {
     if (library.some((entry) => entry.title === game.title)) { setNotice(`${game.title} is already in your library`); return }
-    setLibrary((current) => [...current, { id: Date.now(), title: game.title, status, image: game.image, rating: null, review: '', updated: 'Added just now' }])
+    setLibrary((current) => [...current, { id: Date.now(), title: game.title, status, image: game.image, rating: null, review: '', updated: 'Added just now', genreSlugs: game.genreSlugs, tagSlugs: game.tagSlugs }])
     setNotice(`${game.title} added to your library`)
     setSelectedGame(null)
   }
@@ -137,29 +158,36 @@ function App() {
       {activeNav === 'Reviews' && <ReviewsView library={library} updateEntry={updateEntry} setActiveNav={setActiveNav} />}
     </main>
     {selectedGame && <GameModal game={selectedGame} inLibrary={library.some((entry) => entry.title === selectedGame.title)} close={() => setSelectedGame(null)} addToLibrary={addToLibrary} toggleSaved={toggleSaved} saved={saved.includes(selectedGame.id)} />}
-    {showAdd && <AddGameModal close={() => setShowAdd(false)} addGame={(title, status) => { const match = games.find((game) => game.title.toLowerCase() === title.toLowerCase()); if (match) addToLibrary(match, status); else { setLibrary((current) => [...current, { id: Date.now(), title, status, image: games[0].image, rating: null, review: '', updated: 'Added just now' }]); setNotice(`${title} added to your library`) } setShowAdd(false) }} />}
+    {showAdd && <AddGameModal close={() => setShowAdd(false)} addGame={(title, status) => { const match = games.find((game) => game.title.toLowerCase() === title.toLowerCase()); if (match) addToLibrary(match, status); else { setLibrary((current) => [...current, { id: Date.now(), title, status, image: games[0].image, rating: null, review: '', updated: 'Added just now', genreSlugs: [], tagSlugs: [] }]); setNotice(`${title} added to your library`) } setShowAdd(false) }} />}
     {notice && <div className="toast">✓ {notice}</div>}
   </div>
 }
 
-function buildRecommendations(library: LibraryEntry[], candidates: Game[]) {
-  const rated = library.filter((entry) => entry.rating !== null)
-  const ownedTitles = new Set(library.map((entry) => entry.title.toLowerCase()))
+function scoreCandidates(rated: LibraryEntry[], candidates: Game[], ownedTitles: Set<string>) {
   return candidates
     .filter((game) => !ownedTitles.has(game.title.toLowerCase()))
     .map((game) => {
-      const candidateSignals = gameSignals[game.title] ?? game.genre.toLowerCase().split(/[^a-z]+/).filter(Boolean)
-      const matches = rated.map((seed) => {
-        const shared = (gameSignals[seed.title] ?? []).filter((signal) => candidateSignals.includes(signal))
-        return { seed, shared, score: shared.length * (seed.rating ?? 0) }
-      }).sort((first, second) => second.score - first.score)[0]
-      if (!matches || matches.shared.length === 0) return null
-      const matchPercent = Math.min(98, Math.round(58 + matches.shared.length * 8 + (matches.seed.rating ?? 0) * 3))
-      const sharedText = matches.shared.slice(0, 3).join(', ') || game.genre.toLowerCase()
-      return { ...game, match: matchPercent, reason: `Because you rated ${matches.seed.title} ${matches.seed.rating}/5. Shared signals: ${sharedText}.` }
+      const candidateSignals = [...game.genreSlugs, ...game.tagSlugs]
+      const bestMatch = rated
+        .map((seed) => {
+          const seedSignals = [...seed.genreSlugs, ...seed.tagSlugs]
+          const shared = seedSignals.filter((signal) => candidateSignals.includes(signal))
+          return { seed, shared, score: shared.length * (seed.rating ?? 0) }
+        })
+        .sort((first, second) => second.score - first.score)[0]
+      if (!bestMatch || bestMatch.shared.length === 0) return null
+      const matchPercent = Math.min(98, Math.round(58 + bestMatch.shared.length * 8 + (bestMatch.seed.rating ?? 0) * 3))
+      const sharedText = bestMatch.shared.slice(0, 3).map(formatSlug).join(', ')
+      return { ...game, match: matchPercent, reason: `Because you rated ${bestMatch.seed.title} ${bestMatch.seed.rating}/5. Shared signals: ${sharedText}.` }
     })
     .filter((game): game is Game => game !== null)
     .sort((first, second) => second.match - first.match)
+    .slice(0, 12)
+}
+
+function formatSlug(slug: string) {
+  if (slug === 'rpg') return 'RPG'
+  return slug.replace(/-/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function rankRawgResults(search: string) {
@@ -233,7 +261,8 @@ type RawgGame = {
   rating?: number
   ratings_count?: number
   released?: string
-  genres?: { name: string }[]
+  genres?: { name: string, slug: string }[]
+  tags?: { name: string, slug: string }[]
   platforms?: { platform: { name: string } }[]
 }
 
@@ -248,6 +277,8 @@ function mapRawgGame(game: RawgGame): Game {
     platforms: game.platforms?.slice(0, 4).map((item) => item.platform.name).join(' · ') || 'Platform details unavailable',
     meta: `${game.released?.slice(0, 4) ?? 'Release date unknown'} · RAWG database`,
     rating: game.rating ?? 0,
+    genreSlugs: game.genres?.map((genre) => genre.slug) ?? [],
+    tagSlugs: game.tags?.slice(0, 5).map((tag) => tag.slug) ?? [],
   }
 }
 
@@ -288,7 +319,7 @@ function ReviewEditor({ entry, updateEntry }: { entry: LibraryEntry, updateEntry
 }
 
 function GameModal({ game, inLibrary, close, addToLibrary, toggleSaved, saved }: { game: Game, inLibrary: boolean, close: () => void, addToLibrary: (game: Game, status?: LibraryEntry['status']) => void, toggleSaved: (id: number) => void, saved: boolean }) {
-  return <div className="modal-backdrop" onClick={close}><div className="game-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={close}>×</button>{game.image ? <img className="modal-cover" src={game.image} alt="" /> : <div className="modal-cover modal-placeholder"><span>{game.title.slice(0, 1)}</span><small>Artwork unavailable from RAWG</small></div>}<div className="modal-content"><p className="eyebrow accent">{game.match}% PERSONAL MATCH · {game.genre}</p><h2>{game.title}</h2><p className="modal-reason">{game.reason}</p><div className="why-box"><strong>Why this was suggested</strong><span>Shared tags: exploration · story-rich · atmospheric</span><span>Platforms: {game.platforms}</span></div><div className="modal-actions"><button className="primary-button" onClick={() => addToLibrary(game)}>{inLibrary ? 'Already in library' : '＋ Add to library'}</button><button className={saved ? 'secondary-button saved' : 'secondary-button'} onClick={() => toggleSaved(game.id)}>{saved ? '♥ Saved' : '♡ Save for later'}</button></div></div></div></div>
+  return <div className="modal-backdrop" onClick={close}><div className="game-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={close}>×</button>{game.image ? <img className="modal-cover" src={game.image} alt="" /> : <div className="modal-cover modal-placeholder"><span>{game.title.slice(0, 1)}</span><small>Artwork unavailable from RAWG</small></div>}<div className="modal-content"><p className="eyebrow accent">{game.match}% PERSONAL MATCH · {game.genre}</p><h2>{game.title}</h2><p className="modal-reason">{game.reason}</p><div className="why-box"><strong>Why this was suggested</strong><span>Genres: {game.genreSlugs.length ? game.genreSlugs.map(formatSlug).join(' · ') : game.genre}</span><span>Tags: {game.tagSlugs.length ? game.tagSlugs.map(formatSlug).join(' · ') : 'Not listed by RAWG'}</span><span>Platforms: {game.platforms}</span></div><div className="modal-actions"><button className="primary-button" onClick={() => addToLibrary(game)}>{inLibrary ? 'Already in library' : '＋ Add to library'}</button><button className={saved ? 'secondary-button saved' : 'secondary-button'} onClick={() => toggleSaved(game.id)}>{saved ? '♥ Saved' : '♡ Save for later'}</button></div></div></div></div>
 }
 
 function AddGameModal({ close, addGame }: { close: () => void, addGame: (title: string, status: LibraryEntry['status']) => void }) {
