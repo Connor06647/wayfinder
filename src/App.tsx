@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import './App.css'
 
 type Game = {
@@ -27,6 +27,12 @@ type LibraryEntry = {
   tagSlugs: string[]
 }
 
+type AuthUser = {
+  id: number
+  email: string
+  displayName: string
+}
+
 const games: Game[] = [
   { id: 1, title: 'Sea of Stars', genre: 'Turn-based RPG', reason: 'Shares the hand-crafted world-building and party-based combat you love in Octopath Traveler.', match: 94, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1244090/header.jpg', platforms: 'PC · Switch · PS5', meta: '2023 · Sabotage Studio', rating: 4.8, genreSlugs: ['rpg', 'indie'], tagSlugs: ['turn-based-combat', 'story-rich', 'singleplayer'] },
   { id: 2, title: 'Dredge', genre: 'Atmospheric adventure', reason: 'Combines the quiet exploration of Subnautica with a darker, discovery-first loop.', match: 89, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1562430/header.jpg', platforms: 'PC · Xbox · PS5 · Switch', meta: '2023 · Black Salt Games', rating: 4.5, genreSlugs: ['adventure', 'indie'], tagSlugs: ['atmospheric', 'survival', 'exploration'] },
@@ -42,26 +48,52 @@ const games: Game[] = [
   { id: 12, title: 'It Takes Two', genre: 'Co-op adventure', reason: 'A playful co-operative journey that keeps introducing new ideas and shared challenges.', match: 74, image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1426210/header.jpg', platforms: 'PC · Xbox · PlayStation', meta: '2021 · Hazelight Studios', rating: 4.6, genreSlugs: ['action', 'adventure'], tagSlugs: ['co-op', 'singleplayer', 'story-rich'] },
 ]
 
-const starterLibrary: LibraryEntry[] = [
-  { id: 101, title: 'Hades', status: 'Completed', image: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=700&q=80', rating: 5, genreSlugs: ['action', 'indie'], tagSlugs: ['roguelike', 'singleplayer', 'story-rich'], review: 'A brilliant action loop with characters I wanted to spend more time with.', updated: 'Updated recently' },
-  { id: 102, title: 'Octopath Traveler', status: 'Playing', image: 'https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?auto=format&fit=crop&w=700&q=80', rating: 4.5, genreSlugs: ['rpg'], tagSlugs: ['turn-based-combat', 'story-rich', 'singleplayer'], review: '', updated: 'Updated recently' },
-  { id: 103, title: 'Subnautica', status: 'Want to play', image: 'https://images.unsplash.com/photo-1559825481-12a05cc00344?auto=format&fit=crop&w=700&q=80', rating: null, genreSlugs: ['action', 'adventure'], tagSlugs: ['survival', 'open-world', 'exploration'], review: '', updated: 'Added recently' },
-]
-
 const getStored = <T,>(key: string, fallback: T): T => {
   try { return JSON.parse(localStorage.getItem(key) ?? '') as T } catch { return fallback }
 }
 
+async function apiFetch(path: string, options: RequestInit = {}) {
+  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) } })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.message ?? 'Something went wrong.')
+  return data
+}
+
+function formatRelativeTime(iso: string) {
+  const diffMs = Date.now() - new Date(`${iso.replace(' ', 'T')}Z`).getTime()
+  const diffMinutes = Math.round(diffMs / 60000)
+  if (diffMinutes < 1) return 'Updated just now'
+  if (diffMinutes < 60) return `Updated ${diffMinutes}m ago`
+  const diffHours = Math.round(diffMinutes / 60)
+  if (diffHours < 24) return `Updated ${diffHours}h ago`
+  const diffDays = Math.round(diffHours / 24)
+  return `Updated ${diffDays}d ago`
+}
+
+type ApiLibraryEntry = { id: number, title: string, status: LibraryEntry['status'], image: string | null, rating: number | null, review: string, updatedAt: string, genreSlugs: string[], tagSlugs: string[] }
+
+function hydrateFromApi(entry: ApiLibraryEntry): LibraryEntry {
+  return {
+    id: entry.id,
+    title: entry.title,
+    status: entry.status,
+    image: entry.image ?? '',
+    rating: entry.rating,
+    review: entry.review ?? '',
+    updated: formatRelativeTime(entry.updatedAt),
+    genreSlugs: entry.genreSlugs ?? [],
+    tagSlugs: entry.tagSlugs ?? [],
+  }
+}
+
 function App() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [activeNav, setActiveNav] = useState('Discover')
   const [query, setQuery] = useState('')
   const [activeGenre, setActiveGenre] = useState('All genres')
   const [saved, setSaved] = useState<number[]>(() => getStored('wayfinder-saved', [2]))
-  const [library, setLibrary] = useState<LibraryEntry[]>(() => getStored('wayfinder-library', starterLibrary).map((entry) => {
-    if (entry.genreSlugs?.length || entry.tagSlugs?.length) return entry
-    const known = [...starterLibrary, ...games].find((item) => item.title === entry.title)
-    return { ...entry, genreSlugs: known?.genreSlugs ?? [], tagSlugs: known?.tagSlugs ?? [] }
-  }))
+  const [library, setLibrary] = useState<LibraryEntry[]>([])
   const [showAll, setShowAll] = useState(false)
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -71,8 +103,16 @@ function App() {
   const [searchError, setSearchError] = useState('')
   const [recommendations, setRecommendations] = useState<Game[]>([])
 
+  useEffect(() => {
+    apiFetch('/api/auth/me').then(setUser).catch(() => setUser(null)).finally(() => setAuthLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!user) { setLibrary([]); return }
+    apiFetch('/api/library').then((data) => setLibrary((data.entries ?? []).map(hydrateFromApi))).catch(() => setNotice('Could not load your library'))
+  }, [user])
+
   useEffect(() => { localStorage.setItem('wayfinder-saved', JSON.stringify(saved)) }, [saved])
-  useEffect(() => { localStorage.setItem('wayfinder-library', JSON.stringify(library)) }, [library])
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 2600); return () => window.clearTimeout(timer) }, [notice])
   useEffect(() => {
     const search = query.trim()
@@ -112,7 +152,7 @@ function App() {
     const tagTally = new Map<string, number>()
     signalled.forEach((entry) => {
       entry.genreSlugs.forEach((slug) => genreTally.set(slug, (genreTally.get(slug) ?? 0) + (entry.rating ?? 0)))
-      entry.tagSlugs.forEach((slug) => tagTally.set(slug, (tagTally.get(slug) ?? 0) + (entry.rating ?? 0)))
+      entry.tagSlugs.filter(isAsciiSlug).forEach((slug) => tagTally.set(slug, (tagTally.get(slug) ?? 0) + (entry.rating ?? 0)))
     })
     const topGenres = [...genreTally.entries()].sort((first, second) => second[1] - first[1]).slice(0, 2).map(([slug]) => slug)
     const topTags = [...tagTally.entries()].sort((first, second) => second[1] - first[1]).slice(0, 3).map(([slug]) => slug)
@@ -140,25 +180,72 @@ function App() {
   }, [activeGenre, query])
 
   const toggleSaved = (id: number) => setSaved((current) => current.includes(id) ? current.filter((gameId) => gameId !== id) : [...current, id])
-  const addToLibrary = (game: Game, status: LibraryEntry['status'] = 'Want to play') => {
+  const addToLibrary = async (game: Game, status: LibraryEntry['status'] = 'Want to play') => {
     if (library.some((entry) => entry.title === game.title)) { setNotice(`${game.title} is already in your library`); return }
-    setLibrary((current) => [...current, { id: Date.now(), title: game.title, status, image: game.image, rating: null, review: '', updated: 'Added just now', genreSlugs: game.genreSlugs, tagSlugs: game.tagSlugs }])
-    setNotice(`${game.title} added to your library`)
-    setSelectedGame(null)
+    try {
+      const entry = await apiFetch('/api/library', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: game.title,
+          image: game.image,
+          platforms: game.platforms,
+          rawgId: game.id,
+          rawgRating: game.rating,
+          genres: game.genreSlugs.map((slug) => ({ slug, name: formatSlug(slug) })),
+          tags: game.tagSlugs.map((slug) => ({ slug, name: formatSlug(slug) })),
+          status,
+        }),
+      })
+      setLibrary((current) => [...current, hydrateFromApi(entry)])
+      setNotice(`${game.title} added to your library`)
+      setSelectedGame(null)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : `${game.title} could not be added`)
+    }
   }
-  const updateEntry = (id: number, updates: Partial<LibraryEntry>) => setLibrary((current) => current.map((entry) => entry.id === id ? { ...entry, ...updates, updated: 'Updated just now' } : entry))
-  const removeEntry = (id: number) => { const entry = library.find((item) => item.id === id); setLibrary((current) => current.filter((item) => item.id !== id)); setNotice(`${entry?.title ?? 'Game'} removed from your library`) }
+  const addManualGame = async (title: string, status: LibraryEntry['status']) => {
+    try {
+      const entry = await apiFetch('/api/library', { method: 'POST', body: JSON.stringify({ title, status }) })
+      setLibrary((current) => [...current, hydrateFromApi(entry)])
+      setNotice(`${title} added to your library`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : `${title} could not be added`)
+    }
+    setShowAdd(false)
+  }
+  const updateEntry = async (id: number, updates: Partial<LibraryEntry>) => {
+    setLibrary((current) => current.map((entry) => entry.id === id ? { ...entry, ...updates } : entry))
+    try {
+      const entry = await apiFetch(`/api/library/${id}`, { method: 'PATCH', body: JSON.stringify(updates) })
+      setLibrary((current) => current.map((item) => item.id === id ? hydrateFromApi(entry) : item))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not save that change')
+    }
+  }
+  const removeEntry = (id: number) => {
+    const entry = library.find((item) => item.id === id)
+    setLibrary((current) => current.filter((item) => item.id !== id))
+    apiFetch(`/api/library/${id}`, { method: 'DELETE' })
+      .then(() => setNotice(`${entry?.title ?? 'Game'} removed from your library`))
+      .catch((error: Error) => setNotice(error.message ?? 'Could not remove that game'))
+  }
+  const logout = () => { apiFetch('/api/auth/logout', { method: 'POST' }).finally(() => setUser(null)) }
+
+  if (authLoading) return <div className="auth-shell"><p className="auth-loading">Loading Wayfinder…</p></div>
+  if (!user) return <AuthScreen onAuthenticated={setUser} />
+
+  const initials = user.displayName.trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase() || 'U'
 
   return <div className="app-shell">
-    <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} libraryCount={library.length} profileStrength={Math.min(96, 52 + library.filter((item) => item.rating).length * 7)} />
+    <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} libraryCount={library.length} profileStrength={Math.min(96, 52 + library.filter((item) => item.rating).length * 7)} displayName={user.displayName} initials={initials} onLogout={logout} />
     <main className="content">
-      <header className="topbar"><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{activeNav}</strong></div><div className="top-actions"><button className="notification" aria-label="Notifications">♢<i /></button><div className="mini-avatar">CJ</div></div></header>
+      <header className="topbar"><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{activeNav}</strong></div><div className="top-actions"><button className="notification" aria-label="Notifications">♢<i /></button><button className="icon-button topbar-logout" aria-label="Log out" onClick={logout}>⏻</button><div className="mini-avatar">{initials}</div></div></header>
       {activeNav === 'Discover' && <Discover query={query} setQuery={setQuery} activeGenre={activeGenre} setActiveGenre={setActiveGenre} filteredGames={query.trim().length >= 1 ? remoteGames : filteredGames} recommendations={recommendations} saved={saved} toggleSaved={toggleSaved} showAll={showAll} setShowAll={setShowAll} setSelectedGame={setSelectedGame} setActiveNav={setActiveNav} library={library} searchLoading={searchLoading} searchError={searchError} />}
       {activeNav === 'My library' && <LibraryView library={library} setShowAdd={setShowAdd} updateEntry={updateEntry} removeEntry={removeEntry} setActiveNav={setActiveNav} />}
       {activeNav === 'Reviews' && <ReviewsView library={library} updateEntry={updateEntry} setActiveNav={setActiveNav} />}
     </main>
     {selectedGame && <GameModal game={selectedGame} inLibrary={library.some((entry) => entry.title === selectedGame.title)} close={() => setSelectedGame(null)} addToLibrary={addToLibrary} toggleSaved={toggleSaved} saved={saved.includes(selectedGame.id)} />}
-    {showAdd && <AddGameModal close={() => setShowAdd(false)} addGame={(title, status) => { const match = games.find((game) => game.title.toLowerCase() === title.toLowerCase()); if (match) addToLibrary(match, status); else { setLibrary((current) => [...current, { id: Date.now(), title, status, image: games[0].image, rating: null, review: '', updated: 'Added just now', genreSlugs: [], tagSlugs: [] }]); setNotice(`${title} added to your library`) } setShowAdd(false) }} />}
+    {showAdd && <AddGameModal close={() => setShowAdd(false)} addGame={addManualGame} />}
     {notice && <div className="toast">✓ {notice}</div>}
   </div>
 }
@@ -188,6 +275,10 @@ function scoreCandidates(rated: LibraryEntry[], candidates: Game[], ownedTitles:
 function formatSlug(slug: string) {
   if (slug === 'rpg') return 'RPG'
   return slug.replace(/-/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function isAsciiSlug(slug: string) {
+  return /^[a-z0-9-]+$/.test(slug)
 }
 
 function rankRawgResults(search: string) {
@@ -290,8 +381,8 @@ function mapRawgGame(game: RawgGame): Game {
   }
 }
 
-function Sidebar({ activeNav, setActiveNav, libraryCount, profileStrength }: { activeNav: string, setActiveNav: (value: string) => void, libraryCount: number, profileStrength: number }) {
-  return <aside className="sidebar"><div className="brand"><span className="brand-mark">◒</span><span>wayfinder</span></div><div className="profile-card"><div className="avatar">CJ</div><div><strong>Casey Johnson</strong><span>Curious collector</span></div><button className="icon-button" aria-label="Open profile menu">···</button></div><nav className="main-nav" aria-label="Main navigation">{['Discover', 'My library', 'Reviews'].map((item) => <button key={item} className={activeNav === item ? 'nav-item active' : 'nav-item'} onClick={() => setActiveNav(item)}><span className="nav-icon">{item === 'Discover' ? '⌕' : item === 'My library' ? '▱' : '✦'}</span>{item}{item === 'My library' && <span className="nav-count">{libraryCount}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="taste-progress"><div><span>Profile strength</span><b>{profileStrength}%</b></div><div className="progress-track"><span style={{ width: `${profileStrength}%` }} /></div><small>{profileStrength < 75 ? 'Rate more games for sharper matches' : 'Your recommendations are getting sharper'}</small></div><button className="nav-item"><span className="nav-icon">⚙</span>Settings</button><div className="sidebar-foot"><span className="status-dot" /> Recommendations are learning</div></div></aside>
+function Sidebar({ activeNav, setActiveNav, libraryCount, profileStrength, displayName, initials, onLogout }: { activeNav: string, setActiveNav: (value: string) => void, libraryCount: number, profileStrength: number, displayName: string, initials: string, onLogout: () => void }) {
+  return <aside className="sidebar"><div className="brand"><span className="brand-mark">◒</span><span>wayfinder</span></div><div className="profile-card"><div className="avatar">{initials}</div><div><strong>{displayName}</strong><span>Curious collector</span></div><button className="icon-button" aria-label="Log out" onClick={onLogout}>⏻</button></div><nav className="main-nav" aria-label="Main navigation">{['Discover', 'My library', 'Reviews'].map((item) => <button key={item} className={activeNav === item ? 'nav-item active' : 'nav-item'} onClick={() => setActiveNav(item)}><span className="nav-icon">{item === 'Discover' ? '⌕' : item === 'My library' ? '▱' : '✦'}</span>{item}{item === 'My library' && <span className="nav-count">{libraryCount}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="taste-progress"><div><span>Profile strength</span><b>{profileStrength}%</b></div><div className="progress-track"><span style={{ width: `${profileStrength}%` }} /></div><small>{profileStrength < 75 ? 'Rate more games for sharper matches' : 'Your recommendations are getting sharper'}</small></div><button className="nav-item"><span className="nav-icon">⚙</span>Settings</button><div className="sidebar-foot"><span className="status-dot" /> Recommendations are learning</div></div></aside>
 }
 
 function Discover({ query, setQuery, activeGenre, setActiveGenre, filteredGames, recommendations, saved, toggleSaved, showAll, setShowAll, setSelectedGame, setActiveNav, library, searchLoading, searchError }: { query: string, setQuery: (value: string) => void, activeGenre: string, setActiveGenre: (value: string) => void, filteredGames: Game[], recommendations: Game[], saved: number[], toggleSaved: (id: number) => void, showAll: boolean, setShowAll: (value: boolean) => void, setSelectedGame: (game: Game) => void, setActiveNav: (value: string) => void, library: LibraryEntry[], searchLoading: boolean, searchError: string }) {
@@ -300,6 +391,43 @@ function Discover({ query, setQuery, activeGenre, setActiveGenre, filteredGames,
   const visibleGames = showAll || query.trim() ? displayGames : displayGames.slice(0, 3)
   const ratedSeed = library.find((entry) => entry.rating !== null)
   return <><section className="welcome-row"><div><p className="eyebrow">THURSDAY, 23 SEPTEMBER 2026</p><h1>Find your next <em>favourite</em>.</h1><p className="intro">A little direction for the games you haven't met yet.</p></div><div className="streak"><span className="streak-icon">✦</span><div><strong>4 day streak</strong><small>Keep exploring</small></div></div></section><section className="preference-banner"><div className="banner-copy"><span className="spark">✦</span><div><strong>Your taste map is taking shape</strong><p>You have rated {library.filter((item) => item.rating).length} games. Add a few more to unlock more confident recommendations.</p></div></div><button className="banner-button" onClick={() => setActiveNav('Reviews')}>Rate games <span>→</span></button></section><section className="section-header"><div><p className="eyebrow accent">{query ? 'RAWG GAME DATABASE' : 'PERSONALISED RECOMMENDATIONS'}</p><h2>{query ? `Results for “${query}”` : ratedSeed ? `Because you rated ${ratedSeed.title} ${ratedSeed.rating}/5` : 'Rate a game to get recommendations'}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show less' : 'See all'} <span>↗</span></button></section><div className="filters"><div className="search-field"><span>⌕</span><input id="game-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search RAWG games" /></div><div className="filter-pills">{['All genres', 'RPG', 'Adventure', 'Strategy'].map((genre) => <button key={genre} className={activeGenre === genre ? 'filter active' : 'filter'} onClick={() => setActiveGenre(genre)}>{genre}</button>)}</div></div><p className="data-attribution">Game data and artwork provided by <a href="https://rawg.io/" target="_blank" rel="noreferrer">RAWG</a>.</p>{!query && ratedSeed && <p className="recommendation-note">Each card explains which of your ratings influenced it and what signals were shared.</p>}{searchLoading && <div className="empty-state">Searching the RAWG game database...</div>}{searchError && <div className="empty-state error-state">{searchError}<small> Add your replacement API key to `.env.local`, then restart the dev server.</small></div>}<div className="recommendation-grid">{!searchLoading && visibleGames.map((game, index) => <GameCard key={game.id} game={game} index={index} saved={saved.includes(game.id)} toggleSaved={toggleSaved} open={() => setSelectedGame(game)} />)}</div>{!searchLoading && !searchError && displayGames.length === 0 && <div className="empty-state">Rate a game in Reviews and Wayfinder will start building recommendations for you.</div>}{!query && <section className="library-section"><div className="section-header"><div><p className="eyebrow">KEEPING TRACK</p><h2>Your library</h2></div><button className="text-button" onClick={() => setActiveNav('My library')}>Open library <span>↗</span></button></div><div className="library-list">{library.slice(0, 3).map((game) => <LibraryRow key={game.id} entry={game} compact />)}</div></section>}</>
+}
+
+function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setSubmitting(true)
+    setError('')
+    try {
+      const path = mode === 'login' ? '/api/auth/login' : '/api/auth/register'
+      const body = mode === 'login' ? { email, password } : { email, password, displayName }
+      const user = await apiFetch(path, { method: 'POST', body: JSON.stringify(body) })
+      onAuthenticated(user)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return <div className="auth-shell"><form className="auth-card" onSubmit={submit}>
+    <div className="brand"><span className="brand-mark">◒</span><span>wayfinder</span></div>
+    <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+    <p className="intro">{mode === 'login' ? 'Sign in to reach your library and recommendations.' : 'Start building your taste profile.'}</p>
+    {mode === 'register' && <label>Display name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>}
+    <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+    <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} /></label>
+    {error && <p className="auth-error">{error}</p>}
+    <button className="primary-button" type="submit" disabled={submitting}>{submitting ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
+    <button type="button" className="text-button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>{mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}</button>
+  </form></div>
 }
 
 function GameCard({ game, index, saved, toggleSaved, open }: { game: Game, index: number, saved: boolean, toggleSaved: (id: number) => void, open: () => void }) {
@@ -324,7 +452,16 @@ function ReviewsView({ library, updateEntry, setActiveNav }: { library: LibraryE
 }
 
 function ReviewEditor({ entry, updateEntry }: { entry: LibraryEntry, updateEntry: (id: number, updates: Partial<LibraryEntry>) => void }) {
-  return <div className="review-editor"><img src={entry.image} alt="" /><div className="review-main"><strong>{entry.title}</strong><div className="star-picker">{[1, 2, 3, 4, 5].map((star) => <button key={star} className={entry.rating !== null && star <= entry.rating ? 'star selected' : 'star'} onClick={() => updateEntry(entry.id, { rating: star })} aria-label={`Rate ${star} out of 5`}>★</button>)}</div><textarea value={entry.review} onChange={(event) => updateEntry(entry.id, { review: event.target.value })} placeholder="What did you think? (optional)" /></div></div>
+  const [review, setReview] = useState(entry.review)
+  const debounceRef = useRef<number>(undefined)
+
+  const handleReviewChange = (value: string) => {
+    setReview(value)
+    window.clearTimeout(debounceRef.current)
+    debounceRef.current = window.setTimeout(() => updateEntry(entry.id, { review: value }), 600)
+  }
+
+  return <div className="review-editor"><img src={entry.image} alt="" /><div className="review-main"><strong>{entry.title}</strong><div className="star-picker">{[1, 2, 3, 4, 5].map((star) => <button key={star} className={entry.rating !== null && star <= entry.rating ? 'star selected' : 'star'} onClick={() => updateEntry(entry.id, { rating: star })} aria-label={`Rate ${star} out of 5`}>★</button>)}</div><textarea value={review} onChange={(event) => handleReviewChange(event.target.value)} placeholder="What did you think? (optional)" /></div></div>
 }
 
 function GameModal({ game, inLibrary, close, addToLibrary, toggleSaved, saved }: { game: Game, inLibrary: boolean, close: () => void, addToLibrary: (game: Game, status?: LibraryEntry['status']) => void, toggleSaved: (id: number) => void, saved: boolean }) {
